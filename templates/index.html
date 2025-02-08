@@ -102,30 +102,30 @@
     <h2>Upload Image</h2>
     <form action="/upload" method="post" enctype="multipart/form-data">
       <input type="file" name="file" accept="image/png, image/jpeg" required>
-      <br /><br />
-      <label for="paper-size">Paper Size:</label>
-      <select id="paper-size">
-        <option value="A4">A4</option>
-        <option value="A5">A5</option>
-      </select>
-      <br /><br />
-      <label for="orientation">Orientation:</label>
-      <select id="orientation">
-        <option value="portrait">Portrait</option>
-        <option value="landscape">Landscape</option>
-      </select>
-      <br /><br />
-      <label for="image-position">Image Position:</label>
-      <select id="image-position">
-        <option value="center">Center</option>
-        <option value="top">Top</option>
-        <option value="bottom">Bottom</option>
-        <option value="left">Left</option>
-        <option value="right">Right</option>
-      </select>
-      <br /><br />
       <button type="submit">Upload</button>
     </form>
+    <br /><br />
+    <label for="paper-size">Paper Size:</label>
+    <select id="paper-size">
+      <option value="A5">A5</option>
+      <option value="A4">A4</option>
+    </select>
+    <br /><br />
+    <label for="orientation">Orientation:</label>
+    <select id="orientation">
+      <option value="portrait">Portrait</option>
+      <option value="landscape">Landscape</option>
+    </select>
+    <br /><br />
+    <label for="image-position">Image Position:</label>
+    <select id="image-position">
+      <option value="center">Center</option>
+      <option value="top">Top</option>
+      <option value="bottom">Bottom</option>
+      <option value="left">Left</option>
+      <option value="right">Right</option>
+    </select>
+    <br /><br />
     <br /><br />
     <p>Press ESCAPE or the clear marker button to clear markers.</p>
     <!-- Clear Markers button -->
