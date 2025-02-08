@@ -46,7 +46,7 @@
       justify-content: center;
       align-items: center;
       overflow: hidden;
-      position: relative; /* for positioning the tooltip and SVG overlay */
+      position: relative; /* for positioning tooltip and SVG overlay */
     }
     /* The paper element represents the physical page */
     #paper {
@@ -65,16 +65,16 @@
       object-fit: contain;
       display: block;
     }
-    /* SVG overlay for drawing fixed circles, labels, and the extended line */
+    /* SVG overlay for drawing fixed markers, labels, and lines */
     #overlay {
       position: absolute;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
-      pointer-events: none; /* allow clicks to pass through */
+      pointer-events: none; /* allow mouse events to pass through */
     }
-    /* Coordinates tooltip styling */
+    /* Coordinates tooltip styling (for hover) */
     #coords {
       position: fixed;
       background: rgba(0, 0, 0, 0.7);
@@ -85,6 +85,12 @@
       pointer-events: none;
       font-size: 0.9em;
       z-index: 1000;
+    }
+    /* Styling for the Clear Markers button */
+    #clear-markers #hide-markers {
+      margin-top: 20px;
+      padding: 8px 12px;
+      font-size: 1em;
     }
   </style>
 </head>
@@ -115,20 +121,30 @@
         <option value="right">Right</option>
       </select>
       <br /><br />
+      <!-- (Label positioning and distance calculation features from previous steps were removed per instruction.) -->
       <button type="submit">Upload</button>
     </form>
-  </div>
+
+    <br /><br />
+    <p>Press ESCAPE or the clear marker button to clear markers.
+    </p>
+    <!-- Clear Markers button -->
+    <button id="clear-markers" type="button">Clear Markers</button>
+    <p>Press SPACE or the hide marker button to toggle marker transparency and coordinate display.</p>
+    <!-- Hide Markerts button -->
+    <button id="hide-markers" type="button">Hide Markers</button>
+</div>
 
   <div id="main">
     {% if uploaded_image %}
       <div id="canvas-container">
-        <!-- The paper element will have dimensions computed via JavaScript -->
+        <!-- The paper element's dimensions are computed via JavaScript -->
         <div id="paper">
           <img id="uploaded-image" src="{{ url_for('static', filename='uploads/' + uploaded_image) }}" alt="Uploaded Image">
-          <!-- SVG overlay for drawing fixed points, labels, and the extended line -->
+          <!-- SVG overlay for drawing markers and lines -->
           <svg id="overlay"></svg>
         </div>
-        <!-- Tooltip showing coordinates in mm from the paper's bottom-right -->
+        <!-- Tooltip showing hover coordinates -->
         <div id="coords">X: 0mm, Y: 0mm</div>
       </div>
     {% endif %}
@@ -142,8 +158,12 @@
       const orientationSelect = document.getElementById("orientation");
       const imagePositionSelect = document.getElementById("image-position");
       const overlay = document.getElementById("overlay");
+      const clearMarkersButton = document.getElementById("clear-markers");
+      const hideMarkersButton = document.getElementById("hide-markers");
 
-      // Global array for fixed points (each with x,y in paper pixel coordinates)
+      // Global state for toggling transparent mode.
+      let transparentMode = false;
+      // Array to store fixed points (each with x,y in paper pixel coordinates)
       let fixedPoints = [];
 
       // Update the dimensions of the paper element based on selected paper size and orientation.
@@ -168,11 +188,9 @@
             heightMM = 148;
           }
         }
-        // Get container dimensions.
         const container = document.getElementById("canvas-container");
         const containerRect = container.getBoundingClientRect();
         const paperRatio = widthMM / heightMM;
-        // Compute maximum display dimensions preserving aspect ratio.
         let displayWidth = containerRect.width;
         let displayHeight = containerRect.height;
         if (displayWidth / displayHeight > paperRatio) {
@@ -180,10 +198,8 @@
         } else {
           displayHeight = displayWidth / paperRatio;
         }
-        // Set paper element dimensions.
         paperElement.style.width = displayWidth + "px";
         paperElement.style.height = displayHeight + "px";
-        // Store the mm dimensions in data attributes for coordinate calculations.
         paperElement.dataset.widthmm = widthMM;
         paperElement.dataset.heightmm = heightMM;
       }
@@ -195,17 +211,17 @@
           paperElement.style.justifyContent = "center";
           paperElement.style.alignItems = "center";
         } else if (pos === "top") {
-          paperElement.style.justifyContent = "center";   // horizontally centered
-          paperElement.style.alignItems = "flex-start";     // top aligned
+          paperElement.style.justifyContent = "center";
+          paperElement.style.alignItems = "flex-start";
         } else if (pos === "bottom") {
-          paperElement.style.justifyContent = "center";   // horizontally centered
-          paperElement.style.alignItems = "flex-end";       // bottom aligned
+          paperElement.style.justifyContent = "center";
+          paperElement.style.alignItems = "flex-end";
         } else if (pos === "left") {
-          paperElement.style.justifyContent = "flex-start"; // left aligned
-          paperElement.style.alignItems = "center";         // vertically centered
+          paperElement.style.justifyContent = "flex-start";
+          paperElement.style.alignItems = "center";
         } else if (pos === "right") {
-          paperElement.style.justifyContent = "flex-end";   // right aligned
-          paperElement.style.alignItems = "center";         // vertically centered
+          paperElement.style.justifyContent = "flex-end";
+          paperElement.style.alignItems = "center";
         }
       }
 
@@ -213,13 +229,15 @@
       updatePaperDimensions();
       updateImagePosition();
 
-      // Update dimensions when paper size, orientation, or image position changes.
+      // Update paper dimensions or image position when selections change.
       paperSizeSelect.addEventListener("change", updatePaperDimensions);
       orientationSelect.addEventListener("change", updatePaperDimensions);
       imagePositionSelect.addEventListener("change", updateImagePosition);
 
-      // Mousemove: compute coordinates relative to the paper's bottom-right in mm.
+      // Hover: compute coordinates relative to paper's bottom-right in mm.
       paperElement.addEventListener("mousemove", (event) => {
+        // When in transparent mode, hide the hover coordinate tooltip.
+        if (transparentMode) return;
         const rect = paperElement.getBoundingClientRect();
         const mouseX = event.clientX - rect.left;
         const mouseY = event.clientY - rect.top;
@@ -237,47 +255,88 @@
         coords.style.display = "none";
       });
 
-      // Computes extended line endpoints that lie on the border of the paper.
+      // Compute extended line endpoints for two points.
       function computeExtendedLine(p1, p2, width, height) {
-        // Handle vertical line.
         if (p1.x === p2.x) {
           return { x1: p1.x, y1: 0, x2: p1.x, y2: height };
         }
-        // Handle horizontal line.
         if (p1.y === p2.y) {
           return { x1: 0, y1: p1.y, x2: width, y2: p1.y };
         }
         const slope = (p2.y - p1.y) / (p2.x - p1.x);
         const intercept = p1.y - slope * p1.x;
         const intersections = [];
-        // Left edge (x = 0)
         let yAtLeft = intercept;
         if (yAtLeft >= 0 && yAtLeft <= height) {
           intersections.push({ x: 0, y: yAtLeft });
         }
-        // Right edge (x = width)
         let yAtRight = slope * width + intercept;
         if (yAtRight >= 0 && yAtRight <= height) {
           intersections.push({ x: width, y: yAtRight });
         }
-        // Top edge (y = 0)
         let xAtTop = -intercept / slope;
         if (xAtTop >= 0 && xAtTop <= width) {
           intersections.push({ x: xAtTop, y: 0 });
         }
-        // Bottom edge (y = height)
         let xAtBottom = (height - intercept) / slope;
         if (xAtBottom >= 0 && xAtBottom <= width) {
           intersections.push({ x: xAtBottom, y: height });
         }
         if (intersections.length < 2) return null;
-        // For simplicity, take the first two valid intersections.
         return { x1: intersections[0].x, y1: intersections[0].y,
                  x2: intersections[1].x, y2: intersections[1].y };
       }
 
-      // On right-click, fixate the coordinate, draw an open circle and a label with a dark background.
-      // When two fixed points exist, draw the extended line.
+      // Convert an array of points into a smooth SVG path using Catmull-Rom to cubic Bézier conversion.
+      function catmullRom2Bezier(points, tension) {
+        if (points.length < 2) return "";
+        tension = tension || 0.5;
+        let d = `M ${points[0].x} ${points[0].y}`;
+        for (let i = 0; i < points.length - 1; i++) {
+          const p0 = i === 0 ? points[0] : points[i - 1];
+          const p1 = points[i];
+          const p2 = points[i + 1];
+          const p3 = (i + 2 < points.length) ? points[i + 2] : p2;
+          const bp1x = p1.x + ((p2.x - p0.x) / 6) * tension;
+          const bp1y = p1.y + ((p2.y - p0.y) / 6) * tension;
+          const bp2x = p2.x - ((p3.x - p1.x) / 6) * tension;
+          const bp2y = p2.y - ((p3.y - p1.y) / 6) * tension;
+          d += ` C ${bp1x} ${bp1y}, ${bp2x} ${bp2y}, ${p2.x} ${p2.y}`;
+        }
+        return d;
+      }
+
+      // Draw or update the line (straight or curved) through the fixed points.
+      function updateFixedLine() {
+        // Remove any existing fixed-line elements.
+        const existingLines = overlay.querySelectorAll('.fixed-line');
+        existingLines.forEach(line => line.remove());
+        if (fixedPoints.length < 2) return;
+        const rect = paperElement.getBoundingClientRect();
+        const svgNS = "http://www.w3.org/2000/svg";
+        let pathString = "";
+        if (fixedPoints.length === 2) {
+          const lineEndpoints = computeExtendedLine(fixedPoints[0], fixedPoints[1], rect.width, rect.height);
+          if (lineEndpoints) {
+            pathString = `M ${lineEndpoints.x1} ${lineEndpoints.y1} L ${lineEndpoints.x2} ${lineEndpoints.y2}`;
+          }
+        } else {
+          pathString = catmullRom2Bezier(fixedPoints, 0.5);
+        }
+        if (pathString) {
+          let pathElement = document.createElementNS(svgNS, "path");
+          pathElement.setAttribute("d", pathString);
+          pathElement.setAttribute("stroke", "rgba(0, 0, 255, 0.5)");
+          pathElement.setAttribute("stroke-width", "2");
+          pathElement.setAttribute("fill", "none");
+          pathElement.classList.add("fixed-line");
+          // If in transparent mode, set opacity to 0.75; otherwise full opacity.
+          pathElement.style.opacity = transparentMode ? "0.75" : "1";
+          overlay.appendChild(pathElement);
+        }
+      }
+
+      // On right-click, fixate the coordinate, draw an open circle and a label, then update the connecting line.
       paperElement.addEventListener("contextmenu", function(event) {
         event.preventDefault();
         const rect = paperElement.getBoundingClientRect();
@@ -285,79 +344,89 @@
         const y = event.clientY - rect.top;
         const widthMM = parseFloat(paperElement.dataset.widthmm);
         const heightMM = parseFloat(paperElement.dataset.heightmm);
-        // Convert the fixed pixel coordinates to mm relative to the bottom-right.
         const mmX = Math.round(((rect.width - x) / rect.width) * widthMM);
         const mmY = Math.round(((rect.height - y) / rect.height) * heightMM);
+        const svgNS = "http://www.w3.org/2000/svg";
+        // Save the fixed point.
+        fixedPoints.push({ x: x, y: y });
+        // Create an SVG group to hold the marker and its label.
+        let group = document.createElementNS(svgNS, "g");
+        group.classList.add("fixed-point-group");
+        // Set the group's opacity based on transparentMode.
+        group.style.opacity = transparentMode ? "0.75" : "1";
+        // Draw an open circle.
+        let circle = document.createElementNS(svgNS, "circle");
+        circle.setAttribute("cx", x);
+        circle.setAttribute("cy", y);
+        circle.setAttribute("r", 5);
+        circle.setAttribute("fill", "none");
+        circle.setAttribute("stroke", "red");
+        circle.setAttribute("stroke-width", "2");
+        group.appendChild(circle);
+        // Create the text label.
+        let textLabel = document.createElementNS(svgNS, "text");
+        // Here we simply position the label 10px right and 10px above the marker.
+        // (You could expand this to allow custom offsets if needed.)
+        textLabel.setAttribute("x", x + 10);
+        textLabel.setAttribute("y", y - 10);
+        textLabel.setAttribute("fill", "white");
+        textLabel.setAttribute("font-size", "12");
+        textLabel.textContent = `X: ${mmX}mm, Y: ${mmY}mm`;
+        group.appendChild(textLabel);
+        // After rendering the text, add a dark background rectangle for readability.
+        requestAnimationFrame(() => {
+          const bbox = textLabel.getBBox();
+          const padding = 2;
+          let rectBg = document.createElementNS(svgNS, "rect");
+          rectBg.setAttribute("x", bbox.x - padding);
+          rectBg.setAttribute("y", bbox.y - padding);
+          rectBg.setAttribute("width", bbox.width + padding * 2);
+          rectBg.setAttribute("height", bbox.height + padding * 2);
+          rectBg.setAttribute("fill", "rgba(0, 0, 0, 0.7)");
+          group.insertBefore(rectBg, textLabel);
+        });
+        overlay.appendChild(group);
+        updateFixedLine();
+      });
 
-        if (fixedPoints.length < 2) {
-          fixedPoints.push({ x: x, y: y });
-          const svgNS = "http://www.w3.org/2000/svg";
-          // Create a group to hold both the circle and its label.
-          let group = document.createElementNS(svgNS, "g");
-          group.classList.add("fixed-point-group");
+      // Clear markers (and the associated line and labels) via Escape key or Clear Markers button.
+      function clearMarkers() {
+        fixedPoints = [];
+        while (overlay.firstChild) {
+          overlay.removeChild(overlay.firstChild);
+        }
+      }
 
-          // Draw an open circle at the fixed point.
-          let circle = document.createElementNS(svgNS, "circle");
-          circle.setAttribute("cx", x);
-          circle.setAttribute("cy", y);
-          circle.setAttribute("r", 5);
-          circle.setAttribute("fill", "none");
-          circle.setAttribute("stroke", "red");
-          circle.setAttribute("stroke-width", "2");
-          group.appendChild(circle);
-
-          // Create the text label displaying the mm coordinates.
-          let textLabel = document.createElementNS(svgNS, "text");
-          textLabel.setAttribute("x", x + 10);
-          textLabel.setAttribute("y", y - 10);
-          textLabel.setAttribute("fill", "white");
-          textLabel.setAttribute("font-size", "12");
-          textLabel.textContent = `X: ${mmX}mm, Y: ${mmY}mm`;
-          group.appendChild(textLabel);
-
-          // Append the group to the overlay.
-          overlay.appendChild(group);
-
-          // After the text is rendered, compute its bounding box and create a background rectangle.
-          requestAnimationFrame(() => {
-              const bbox = textLabel.getBBox();
-              const padding = 2;
-              let rectBg = document.createElementNS(svgNS, "rect");
-              rectBg.setAttribute("x", bbox.x - padding);
-              rectBg.setAttribute("y", bbox.y - padding);
-              rectBg.setAttribute("width", bbox.width + padding * 2);
-              rectBg.setAttribute("height", bbox.height + padding * 2);
-              rectBg.setAttribute("fill", "rgba(0, 0, 0, 0.7)");
-              // Insert the rectangle behind the text label.
-              group.insertBefore(rectBg, textLabel);
+      function hideMarkers(){
+        event.preventDefault();
+          transparentMode = !transparentMode;
+          // Update opacity of all marker groups and connecting lines.
+          document.querySelectorAll('.fixed-point-group, .fixed-line').forEach(el => {
+            el.style.opacity = transparentMode ? "0.20" : "1";
           });
-
-          // When two fixed points exist, compute and draw the extended line.
-          if (fixedPoints.length === 2) {
-            let lineEndpoints = computeExtendedLine(fixedPoints[0], fixedPoints[1], rect.width, rect.height);
-            if (lineEndpoints) {
-              let line = document.createElementNS(svgNS, "line");
-              line.setAttribute("x1", lineEndpoints.x1);
-              line.setAttribute("y1", lineEndpoints.y1);
-              line.setAttribute("x2", lineEndpoints.x2);
-              line.setAttribute("y2", lineEndpoints.y2);
-              line.setAttribute("stroke", "rgba(0, 0, 255, 0.5)");
-              line.setAttribute("stroke-width", "2");
-              line.classList.add("fixed-line");
-              overlay.appendChild(line);
-            }
+          // In transparent mode, hide the hover coordinate tooltip.
+          if (transparentMode) {
+            coords.style.display = "none";
           }
+      }
+
+      document.addEventListener("keydown", function(event) {
+        if (event.key === "Escape") {
+          clearMarkers();
+        }
+        // When space is pressed, toggle transparent mode.
+        if (event.key === " ") {
+            hideMarkers();
+          
         }
       });
 
-      // When Escape is pressed, clear fixed coordinates and remove all drawn circles, labels, and lines.
-      document.addEventListener("keydown", function(event) {
-        if (event.key === "Escape") {
-          fixedPoints = [];
-          while (overlay.firstChild) {
-            overlay.removeChild(overlay.firstChild);
-          }
-        }
+      clearMarkersButton.addEventListener("click", function() {
+        clearMarkers();
+      });
+
+      hideMarkersButton.addEventListener("click", function() {
+        hideMarkers();
       });
     });
   </script>
