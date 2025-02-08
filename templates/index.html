@@ -2,34 +2,25 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Tekentool</title>
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
     /* Universal box-sizing */
-    * {
-      box-sizing: border-box;
-    }
-    body {
-      display: flex;
-      height: 100vh;
-      margin: 0;
-      font-family: sans-serif;
-    }
-    /* Sidebar styling */
-    #sidebar {
-      width: 250px;
-      padding: 20px;
-      background: #f4f4f4;
-      overflow-y: auto;
-      word-wrap: break-word;
-    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body { font-family: sans-serif; }
+    
     /* Main area styling */
     #main {
       flex-grow: 1;
       display: flex;
+      max-width: 100%;
+      max-height: 100%;
       justify-content: center;
       align-items: center;
-      padding: 20px; /* whitespace around the container */
+      padding: 20px;
       background: #e0e0e0;
       overflow: auto;
     }
@@ -41,12 +32,12 @@
       padding: 20px;
       background: #ddd;
       border-radius: 10px;
-      box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+      box-shadow: 0px 0px 10px rgba(0,0,0,0.1);
       display: flex;
       justify-content: center;
       align-items: center;
       overflow: hidden;
-      position: relative; /* for positioning tooltip and SVG overlay */
+      position: relative;
     }
     /* The paper element represents the physical page */
     #paper {
@@ -54,10 +45,9 @@
       border: 1px solid #ccc;
       position: relative;
       display: flex;
-      justify-content: center; /* default center horizontally */
-      align-items: center;     /* default center vertically */
+      justify-content: center;
+      align-items: center;
       overflow: hidden;
-      /* Set default transform values */
       transform: scale(1);
       transform-origin: center center;
     }
@@ -68,90 +58,123 @@
       object-fit: contain;
       display: block;
     }
-    /* SVG overlay for drawing fixed markers, labels, and lines */
+    /* SVG overlay for drawing markers, labels, and lines */
     #overlay {
       position: absolute;
-      top: 0;
-      left: 0;
+      top: 0; left: 0;
       width: 100%;
       height: 100%;
-      pointer-events: none; /* allow mouse events to pass through */
+      pointer-events: none;
     }
     /* Coordinates tooltip styling (for hover) */
     #coords {
       position: fixed;
-      background: rgba(0, 0, 0, 0.7);
+      background: rgba(0,0,0,0.7);
       color: white;
-      padding: 5px;
+      padding: 5px 10px;
       border-radius: 5px;
-      display: none;
-      pointer-events: none;
       font-size: 0.9em;
       z-index: 1000;
+      display: none;
     }
-    /* Styling for the Clear Markers and Hide Markers buttons */
-    #clear-markers, #hide-markers {
-      margin-top: 20px;
-      padding: 8px 12px;
-      font-size: 1em;
+    /* Adjust sidebar height to fill viewport */
+    #sidebar {
+      height: 100%;
     }
   </style>
 </head>
-<body>
-  <div id="sidebar">
-    <h2>Upload Image</h2>
-    <form action="/upload" method="post" enctype="multipart/form-data">
-      <input type="file" name="file" accept="image/png, image/jpeg" required>
-      <button type="submit">Upload</button>
-    </form>
-    <br /><br />
-    <label for="paper-size">Paper Size:</label>
-    <select id="paper-size">
-      <option value="A5">A5</option>
-      <option value="A4">A4</option>
-    </select>
-    <br /><br />
-    <label for="orientation">Orientation:</label>
-    <select id="orientation">
-      <option value="portrait">Portrait</option>
-      <option value="landscape">Landscape</option>
-    </select>
-    <br /><br />
-    <label for="image-position">Image Position:</label>
-    <select id="image-position">
-      <option value="center">Center</option>
-      <option value="top">Top</option>
-      <option value="bottom">Bottom</option>
-      <option value="left">Left</option>
-      <option value="right">Right</option>
-    </select>
-    <br /><br />
-    <br /><br />
-    <p>Press ESCAPE or the clear marker button to clear markers.</p>
-    <!-- Clear Markers button -->
-    <button id="clear-markers" type="button">Clear Markers</button>
-    <p>Press SPACE or the hide marker button to toggle marker transparency and coordinate display.</p>
-    <!-- Hide Markers button -->
-    <button id="hide-markers" type="button">Hide Markers</button>
-    <p>Press CTRL+Z / CMD+Z to undo the last marker.</p>
-    <p>Press D to zoom in (2×) onto the area with markers (markers become transparent).</p>
-  </div>
+<body class="bg-light">
+  <!-- Navbar with toggle for the sidebar -->
+  <nav class="navbar navbar-light bg-light border-bottom">
+    <div class="container-fluid">
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#sidebar" aria-controls="sidebar" aria-expanded="true" aria-label="Toggle sidebar">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <span class="navbar-brand mb-0 h1">Tekentool</span>
+    </div>
+  </nav>
 
-  <div id="main">
-    {% if uploaded_image %}
-      <div id="canvas-container">
-        <!-- The paper element's dimensions are computed via JavaScript -->
-        <div id="paper">
-          <img id="uploaded-image" src="{{ url_for('static', filename='uploads/' + uploaded_image) }}" alt="Uploaded Image">
-          <!-- SVG overlay for drawing markers and lines -->
-          <svg id="overlay"></svg>
+  <div class="container-fluid" style="height: calc(100% - 56px);">
+    <div class="row h-100">
+      <!-- Sidebar (Bootstrap collapse) -->
+      <div id="sidebar" class="col-md-3 collapse show bg-white border-end p-4">
+        <h2 class="h5 mb-3">Upload Image</h2>
+        <form action="/upload" method="post" enctype="multipart/form-data">
+          <div class="mb-3">
+            <input type="file" name="file" accept="image/png, image/jpeg" class="form-control" required>
+          </div>
+          <button type="submit" class="btn btn-primary w-100">Upload</button>
+        </form>
+        <hr>
+        <div class="mb-3">
+          <label for="paper-size" class="form-label">Paper Size:</label>
+          <select id="paper-size" class="form-select">
+            <option value="A5">A5</option>
+            <option value="A4">A4</option>
+          </select>
         </div>
-        <!-- Tooltip showing hover coordinates -->
-        <div id="coords">X: 0mm, Y: 0mm</div>
+        <div class="mb-3">
+          <label for="orientation" class="form-label">Orientation:</label>
+          <select id="orientation" class="form-select">
+            <option value="portrait">Portrait</option>
+            <option value="landscape">Landscape</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label for="image-position" class="form-label">Image Position:</label>
+          <select id="image-position" class="form-select">
+            <option value="center">Center</option>
+            <option value="top">Top</option>
+            <option value="bottom">Bottom</option>
+            <option value="left">Left</option>
+            <option value="right">Right</option>
+          </select>
+        </div>
+        <hr>
+        <h2 class="h6">Functions</h2>
+        <div class="d-grid gap-2">
+          <button id="clear-markers" type="button" class="btn btn-outline-danger" data-bs-toggle="tooltip" data-bs-placement="right" title="Shortcut: ESC">Clear Markers</button>
+          <button id="hide-markers" type="button" class="btn btn-outline-secondary" data-bs-toggle="tooltip" data-bs-placement="right" title="Shortcut: SPACE">Hide Markers</button>
+          <button id="undo-marker" type="button" class="btn btn-outline-warning" data-bs-toggle="tooltip" data-bs-placement="right" title="Shortcut: CTRL/CMD+Z">Undo Last Marker</button>
+          <button id="zoom-toggle" type="button" class="btn btn-outline-info" data-bs-toggle="tooltip" data-bs-placement="right" title="Shortcut: D">Zoom In/Out</button>
+        </div>
+        <hr>
+        <div class="small">
+          <p>Keyboard Shortcuts:</p>
+          <ul class="list-unstyled">
+            <li>ESC: Clear Markers</li>
+            <li>SPACE: Toggle Marker Transparency & Coordinates</li>
+            <li>CTRL/CMD+Z: Undo Last Marker</li>
+            <li>D: Zoom In/Out (Markers become transparent)</li>
+          </ul>
+        </div>
       </div>
-    {% endif %}
+      <!-- Main content area -->
+      <div id="main" class="col-md-9 d-flex align-items-center justify-content-center p-4">
+        {% if uploaded_image %}
+        <div id="canvas-container">
+          <div id="paper">
+            <img id="uploaded-image" src="{{ url_for('static', filename='uploads/' + uploaded_image) }}" alt="Uploaded Image">
+            <svg id="overlay"></svg>
+          </div>
+          <div id="coords">X: 0mm, Y: 0mm</div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
   </div>
 
+  <!-- Bootstrap Bundle (includes Popper) -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    // Initialize Bootstrap tooltips
+    document.addEventListener("DOMContentLoaded", function() {
+      var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+      tooltipTriggerList.forEach(function (tooltipTriggerEl) {
+        new bootstrap.Tooltip(tooltipTriggerEl);
+      });
+    });
+  </script>
   <script>
     document.addEventListener("DOMContentLoaded", function() {
       const paperElement = document.getElementById("paper");
@@ -160,13 +183,16 @@
       const orientationSelect = document.getElementById("orientation");
       const imagePositionSelect = document.getElementById("image-position");
       const overlay = document.getElementById("overlay");
+
+      // Function buttons
       const clearMarkersButton = document.getElementById("clear-markers");
       const hideMarkersButton = document.getElementById("hide-markers");
+      const undoMarkerButton = document.getElementById("undo-marker");
+      const zoomToggleButton = document.getElementById("zoom-toggle");
 
-      // Global state for toggling transparent mode and zoom.
+      // Global state for toggling transparency and zoom.
       let transparentMode = false;
       let zoomedIn = false;
-      // Array to store fixed points (each with x,y in paper pixel coordinates)
       let fixedPoints = [];
 
       // Update the dimensions of the paper element based on selected paper size and orientation.
@@ -176,19 +202,15 @@
         let widthMM, heightMM;
         if (size === "A4") {
           if (orient === "portrait") {
-            widthMM = 210;
-            heightMM = 297;
+            widthMM = 210; heightMM = 297;
           } else {
-            widthMM = 297;
-            heightMM = 210;
+            widthMM = 297; heightMM = 210;
           }
         } else if (size === "A5") {
           if (orient === "portrait") {
-            widthMM = 148;
-            heightMM = 210;
+            widthMM = 148; heightMM = 210;
           } else {
-            widthMM = 210;
-            heightMM = 148;
+            widthMM = 210; heightMM = 148;
           }
         }
         const container = document.getElementById("canvas-container");
@@ -232,15 +254,13 @@
       updatePaperDimensions();
       updateImagePosition();
 
-      // Update paper dimensions or image position when selections change.
       paperSizeSelect.addEventListener("change", updatePaperDimensions);
       orientationSelect.addEventListener("change", updatePaperDimensions);
       imagePositionSelect.addEventListener("change", updateImagePosition);
 
       // Hover: compute coordinates relative to paper's bottom-right in mm.
       paperElement.addEventListener("mousemove", (event) => {
-        // When in transparent mode, hide the hover coordinate tooltip.
-        if (transparentMode) return;
+        if (transparentMode) return; // Hide tooltip in transparent mode.
         const rect = paperElement.getBoundingClientRect();
         const mouseX = event.clientX - rect.left;
         const mouseY = event.clientY - rect.top;
@@ -258,39 +278,26 @@
         coords.style.display = "none";
       });
 
-      // Compute extended line endpoints for two points.
+      // Helper functions for paths.
       function computeExtendedLine(p1, p2, width, height) {
-        if (p1.x === p2.x) {
-          return { x1: p1.x, y1: 0, x2: p1.x, y2: height };
-        }
-        if (p1.y === p2.y) {
-          return { x1: 0, y1: p1.y, x2: width, y2: p1.y };
-        }
+        if (p1.x === p2.x) return { x1: p1.x, y1: 0, x2: p1.x, y2: height };
+        if (p1.y === p2.y) return { x1: 0, y1: p1.y, x2: width, y2: p1.y };
         const slope = (p2.y - p1.y) / (p2.x - p1.x);
         const intercept = p1.y - slope * p1.x;
         const intersections = [];
         let yAtLeft = intercept;
-        if (yAtLeft >= 0 && yAtLeft <= height) {
-          intersections.push({ x: 0, y: yAtLeft });
-        }
+        if (yAtLeft >= 0 && yAtLeft <= height) intersections.push({ x: 0, y: yAtLeft });
         let yAtRight = slope * width + intercept;
-        if (yAtRight >= 0 && yAtRight <= height) {
-          intersections.push({ x: width, y: yAtRight });
-        }
+        if (yAtRight >= 0 && yAtRight <= height) intersections.push({ x: width, y: yAtRight });
         let xAtTop = -intercept / slope;
-        if (xAtTop >= 0 && xAtTop <= width) {
-          intersections.push({ x: xAtTop, y: 0 });
-        }
+        if (xAtTop >= 0 && xAtTop <= width) intersections.push({ x: xAtTop, y: 0 });
         let xAtBottom = (height - intercept) / slope;
-        if (xAtBottom >= 0 && xAtBottom <= width) {
-          intersections.push({ x: xAtBottom, y: height });
-        }
+        if (xAtBottom >= 0 && xAtBottom <= width) intersections.push({ x: xAtBottom, y: height });
         if (intersections.length < 2) return null;
         return { x1: intersections[0].x, y1: intersections[0].y,
                  x2: intersections[1].x, y2: intersections[1].y };
       }
 
-      // Convert an array of points into a smooth SVG path using Catmull-Rom to cubic Bézier conversion.
       function catmullRom2Bezier(points, tension) {
         if (points.length < 2) return "";
         tension = tension || 0.5;
@@ -309,19 +316,16 @@
         return d;
       }
 
-      // Draw or update the line (straight or curved) through the fixed points.
       function updateFixedLine() {
-        // Remove any existing fixed-line elements.
-        const existingLines = overlay.querySelectorAll('.fixed-line');
-        existingLines.forEach(line => line.remove());
+        document.querySelectorAll('.fixed-line').forEach(line => line.remove());
         if (fixedPoints.length < 2) return;
         const rect = paperElement.getBoundingClientRect();
         const svgNS = "http://www.w3.org/2000/svg";
         let pathString = "";
         if (fixedPoints.length === 2) {
-          const lineEndpoints = computeExtendedLine(fixedPoints[0], fixedPoints[1], rect.width, rect.height);
-          if (lineEndpoints) {
-            pathString = `M ${lineEndpoints.x1} ${lineEndpoints.y1} L ${lineEndpoints.x2} ${lineEndpoints.y2}`;
+          const endpoints = computeExtendedLine(fixedPoints[0], fixedPoints[1], rect.width, rect.height);
+          if (endpoints) {
+            pathString = `M ${endpoints.x1} ${endpoints.y1} L ${endpoints.x2} ${endpoints.y2}`;
           }
         } else {
           pathString = catmullRom2Bezier(fixedPoints, 0.5);
@@ -333,14 +337,12 @@
           pathElement.setAttribute("stroke-width", "2");
           pathElement.setAttribute("fill", "none");
           pathElement.classList.add("fixed-line");
-          // Set opacity based on transparent mode.
           pathElement.style.opacity = transparentMode ? "0.75" : "1";
           overlay.appendChild(pathElement);
         }
       }
 
-      // On right-click, fixate the coordinate, draw an open circle and a label.
-      // If there is a previous marker, calculate and append the distance.
+      // Right-click marker placement.
       paperElement.addEventListener("contextmenu", function(event) {
         event.preventDefault();
         const rect = paperElement.getBoundingClientRect();
@@ -351,13 +353,10 @@
         const mmX = Math.round(((rect.width - x) / rect.width) * widthMM);
         const mmY = Math.round(((rect.height - y) / rect.height) * heightMM);
         const svgNS = "http://www.w3.org/2000/svg";
-        // Save the fixed point.
         fixedPoints.push({ x: x, y: y });
-        // Create an SVG group to hold the marker and its label.
         let group = document.createElementNS(svgNS, "g");
         group.classList.add("fixed-point-group");
         group.style.opacity = transparentMode ? "0.75" : "1";
-        // Draw an open circle.
         let circle = document.createElementNS(svgNS, "circle");
         circle.setAttribute("cx", x);
         circle.setAttribute("cy", y);
@@ -366,13 +365,11 @@
         circle.setAttribute("stroke", "red");
         circle.setAttribute("stroke-width", "2");
         group.appendChild(circle);
-        // Create the text label.
         let textLabel = document.createElementNS(svgNS, "text");
         textLabel.setAttribute("x", x + 10);
         textLabel.setAttribute("y", y - 10);
         textLabel.setAttribute("fill", "white");
         textLabel.setAttribute("font-size", "12");
-        // Build the label text.
         let labelText = `X: ${mmX}mm, Y: ${mmY}mm`;
         if (fixedPoints.length > 1) {
           const prev = fixedPoints[fixedPoints.length - 2];
@@ -385,7 +382,6 @@
         }
         textLabel.textContent = labelText;
         group.appendChild(textLabel);
-        // After rendering the text, add a dark background rectangle for readability.
         requestAnimationFrame(() => {
           const bbox = textLabel.getBBox();
           const padding = 2;
@@ -401,20 +397,17 @@
         updateFixedLine();
       });
 
-      // Function to undo the last marker.
       function undoMarker() {
         if (fixedPoints.length > 0) {
           fixedPoints.pop();
           const groups = overlay.querySelectorAll('.fixed-point-group');
           if (groups.length > 0) {
-            const lastGroup = groups[groups.length - 1];
-            overlay.removeChild(lastGroup);
+            overlay.removeChild(groups[groups.length - 1]);
           }
           updateFixedLine();
         }
       }
 
-      // Clear markers (and the associated line and labels).
       function clearMarkers() {
         fixedPoints = [];
         while (overlay.firstChild) {
@@ -422,34 +415,26 @@
         }
       }
 
-      // Toggle transparency mode via SPACE key or Hide Markers button.
       function hideMarkers(event) {
         if (event) event.preventDefault();
         transparentMode = !transparentMode;
         document.querySelectorAll('.fixed-point-group, .fixed-line').forEach(el => {
           el.style.opacity = transparentMode ? "0.20" : "1";
         });
-        if (transparentMode) {
-          coords.style.display = "none";
-        }
+        if (transparentMode) coords.style.display = "none";
       }
 
-      // Toggle zoom in/out via D key.
       function toggleZoom() {
         if (!zoomedIn) {
-          // Zoom in: scale paper 2× from its center.
           paperElement.style.transform = "scale(2)";
           paperElement.style.transformOrigin = "center center";
           zoomedIn = true;
-          // Force markers to be transparent.
           document.querySelectorAll('.fixed-point-group, .fixed-line').forEach(el => {
             el.style.opacity = "0.20";
           });
         } else {
-          // Zoom out: reset scale.
           paperElement.style.transform = "scale(1)";
           zoomedIn = false;
-          // Restore markers' opacity based on transparentMode state.
           document.querySelectorAll('.fixed-point-group, .fixed-line').forEach(el => {
             el.style.opacity = transparentMode ? "0.20" : "1";
           });
@@ -457,32 +442,23 @@
       }
 
       document.addEventListener("keydown", function(event) {
-        if (event.key === "Escape") {
-          clearMarkers();
-        }
-        // SPACE toggles marker transparency.
-        if (event.key === " ") {
-          hideMarkers(event);
-        }
-        // CTRL+Z / CMD+Z undoes the last marker.
+        if (event.key === "Escape") { clearMarkers(); }
+        if (event.key === " ") { hideMarkers(event); }
         if (event.key.toLowerCase() === "z" && (event.ctrlKey || event.metaKey)) {
           event.preventDefault();
           undoMarker();
         }
-        // D toggles zoom in/out and forces marker transparency.
         if (event.key.toLowerCase() === "d") {
           event.preventDefault();
           toggleZoom();
         }
       });
 
-      clearMarkersButton.addEventListener("click", function() {
-        clearMarkers();
-      });
-
-      hideMarkersButton.addEventListener("click", function(event) {
-        hideMarkers(event);
-      });
+      clearMarkersButton.addEventListener("click", clearMarkers);
+      hideMarkersButton.addEventListener("click", function(event) { hideMarkers(event); });
+      // Also add click handlers for the new function buttons.
+      document.getElementById("undo-marker").addEventListener("click", undoMarker);
+      document.getElementById("zoom-toggle").addEventListener("click", toggleZoom);
     });
   </script>
 </body>
