@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Tekentool</title>
   <style>
-    /* Ensure padding and borders are included in element's width/height */
+    /* Universal box-sizing */
     * {
       box-sizing: border-box;
     }
@@ -15,7 +15,7 @@
       margin: 0;
       font-family: sans-serif;
     }
-    /* Sidebar with fixed width and text wrapping */
+    /* Sidebar styling */
     #sidebar {
       width: 250px;
       padding: 20px;
@@ -23,46 +23,51 @@
       overflow-y: auto;
       word-wrap: break-word;
     }
-    /* Main area takes the rest of the space, with padding to provide whitespace */
-    /* Ensure padding and borders are included in the element's total width/height */
-* {
-  box-sizing: border-box;
-}
-
-#main {
-  flex-grow: 1;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 20px; /* whitespace around the container */
-  background: #e0e0e0;
-  overflow: auto;
-}
-
-#canvas-container {
-  box-sizing: border-box;           /* Include padding in container dimensions */
-  width: 90%;                       /* Use 90% of the available main area width */
-  height: 90%;                      /* Use 90% of the available main area height */
-  padding: 20px;                    /* Inner whitespace around the image */
-  background: white;
-  border-radius: 10px;
-  box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  overflow: hidden;                 /* Hide any overflow */
-}
-
-#uploaded-image {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;              /* Ensure the image scales down while maintaining aspect ratio */
-  display: block;
-}
-
+    /* Main area styling */
+    #main {
+      flex-grow: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px; /* whitespace around the container */
+      background: #e0e0e0;
+      overflow: auto;
+    }
+    /* Canvas container for the paper element */
+    #canvas-container {
+      box-sizing: border-box;
+      width: 90%;
+      height: 90%;
+      padding: 20px;
+      background: #ddd;
+      border-radius: 10px;
+      box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
+      position: relative; /* for positioning the coordinate tooltip */
+    }
+    /* The paper element represents the physical page */
+    #paper {
+      background: white;
+      border: 1px solid #ccc;
+      position: relative;
+      display: flex;
+      justify-content: center; /* default center horizontally */
+      align-items: center;     /* default center vertically */
+      overflow: hidden;
+    }
+    /* The uploaded image is centered (or positioned as set) inside the paper */
+    #uploaded-image {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      display: block;
+    }
     /* Coordinates tooltip styling */
     #coords {
-      position: absolute;
+      position: fixed;
       background: rgba(0, 0, 0, 0.7);
       color: white;
       padding: 5px;
@@ -70,6 +75,7 @@
       display: none;
       pointer-events: none;
       font-size: 0.9em;
+      z-index: 1000;
     }
   </style>
 </head>
@@ -81,14 +87,23 @@
       <br /><br />
       <label for="paper-size">Paper Size:</label>
       <select id="paper-size">
-        <option value="A4">A4</option>
         <option value="A5">A5</option>
+        <option value="A4">A4</option>
       </select>
       <br /><br />
       <label for="orientation">Orientation:</label>
       <select id="orientation">
         <option value="portrait">Portrait</option>
         <option value="landscape">Landscape</option>
+      </select>
+      <br /><br />
+      <label for="image-position">Image Position:</label>
+      <select id="image-position">
+        <option value="center">Center</option>
+        <option value="top">Top</option>
+        <option value="bottom">Bottom</option>
+        <option value="left">Left</option>
+        <option value="right">Right</option>
       </select>
       <br /><br />
       <button type="submit">Upload</button>
@@ -98,46 +113,127 @@
   <div id="main">
     {% if uploaded_image %}
       <div id="canvas-container">
-        <img id="uploaded-image" src="{{ url_for('static', filename='uploads/' + uploaded_image) }}" alt="Uploaded Image">
+        <!-- The paper element's dimensions (in pixels) will be updated via JS to match the selected paper size/orientation -->
+        <div id="paper">
+          <img id="uploaded-image" src="{{ url_for('static', filename='uploads/' + uploaded_image) }}" alt="Uploaded Image">
+        </div>
+        <!-- Tooltip showing coordinates in mm from the paper's bottom-right -->
         <div id="coords">X: 0mm, Y: 0mm</div>
       </div>
     {% endif %}
   </div>
 
   <script>
-    const image = document.getElementById("uploaded-image");
-    const orientation = document.getElementById("orientation");
-    const coords = document.getElementById("coords");
-    const paperSizes = { A4: [210, 297], A5: [148, 210] };
+    document.addEventListener("DOMContentLoaded", function() {
+      const paperElement = document.getElementById("paper");
+      const coords = document.getElementById("coords");
+      const paperSizeSelect = document.getElementById("paper-size");
+      const orientationSelect = document.getElementById("orientation");
+      const imagePositionSelect = document.getElementById("image-position");
 
-    if (image) {
-      image.addEventListener("mousemove", (event) => {
-        const rect = image.getBoundingClientRect();
-        const pxX = event.clientX - rect.left;
-        const pxY = event.clientY - rect.top;
-        const size = paperSizes[document.getElementById("paper-size").value];
-        
-        let mmX, mmY;
-        if (orientation.value === "landscape") {
-            mmX = Math.round((pxX / rect.width) * size[1]);
-            mmY = Math.round((pxY / rect.height) * size[0]);
-        } else {
-            mmX = Math.round((pxX / rect.width) * size[0]);
-            mmY = Math.round((pxY / rect.height) * size[1]);
+      // Update the dimensions of the paper element based on the selected paper size and orientation.
+      function updatePaperDimensions() {
+        const size = paperSizeSelect.value;
+        const orient = orientationSelect.value;
+        let widthMM, heightMM;
+        if (size === "A4") {
+          if (orient === "portrait") {
+            widthMM = 210;
+            heightMM = 297;
+          } else {
+            widthMM = 297;
+            heightMM = 210;
+          }
+        } else if (size === "A5") {
+          if (orient === "portrait") {
+            widthMM = 148;
+            heightMM = 210;
+          } else {
+            widthMM = 210;
+            heightMM = 148;
+          }
         }
-        
-        
-        // console.log(orientation.value)
+
+        // Get the canvas container's dimensions.
+        const container = document.getElementById("canvas-container");
+        const containerRect = container.getBoundingClientRect();
+        const paperRatio = widthMM / heightMM;
+
+        // Compute the maximum display dimensions for the paper element so it fits within the container.
+        let displayWidth = containerRect.width;
+        let displayHeight = containerRect.height;
+        if (displayWidth / displayHeight > paperRatio) {
+          displayWidth = displayHeight * paperRatio;
+        } else {
+          displayHeight = displayWidth / paperRatio;
+        }
+
+        // Set the paper element dimensions.
+        paperElement.style.width = displayWidth + "px";
+        paperElement.style.height = displayHeight + "px";
+
+        // Store the mm dimensions in data attributes for later calculations.
+        paperElement.dataset.widthmm = widthMM;
+        paperElement.dataset.heightmm = heightMM;
+      }
+
+      // Update image position within the paper element based on the selected option.
+      function updateImagePosition() {
+        const pos = imagePositionSelect.value;
+        if (pos === "center") {
+          paperElement.style.justifyContent = "center";
+          paperElement.style.alignItems = "center";
+        } else if (pos === "top") {
+          paperElement.style.justifyContent = "center";   // horizontally centered
+          paperElement.style.alignItems = "flex-start";     // top aligned
+        } else if (pos === "bottom") {
+          paperElement.style.justifyContent = "center";   // horizontally centered
+          paperElement.style.alignItems = "flex-end";       // bottom aligned
+        } else if (pos === "left") {
+          paperElement.style.justifyContent = "flex-start"; // left aligned
+          paperElement.style.alignItems = "center";         // vertically centered
+        } else if (pos === "right") {
+          paperElement.style.justifyContent = "flex-end";   // right aligned
+          paperElement.style.alignItems = "center";         // vertically centered
+        }
+      }
+
+      // Initialize paper dimensions and image position.
+      updatePaperDimensions();
+      updateImagePosition();
+
+      // Update paper dimensions when the paper size or orientation changes.
+      paperSizeSelect.addEventListener("change", updatePaperDimensions);
+      orientationSelect.addEventListener("change", updatePaperDimensions);
+
+      // Update image position when the dropdown selection changes.
+      imagePositionSelect.addEventListener("change", updateImagePosition);
+
+      // Compute mouse coordinates relative to the paper element.
+      paperElement.addEventListener("mousemove", (event) => {
+        const rect = paperElement.getBoundingClientRect();
+        const mouseX = event.clientX - rect.left;
+        const mouseY = event.clientY - rect.top;
+
+        // Retrieve the actual paper size in mm.
+        const widthMM = parseFloat(paperElement.dataset.widthmm);
+        const heightMM = parseFloat(paperElement.dataset.heightmm);
+
+        // Compute the distances from the bottom-right corner.
+        const mmX = Math.round(((rect.width - mouseX) / rect.width) * widthMM);
+        const mmY = Math.round(((rect.height - mouseY) / rect.height) * heightMM);
+
+        // Position and update the tooltip.
         coords.style.left = `${event.clientX + 10}px`;
         coords.style.top = `${event.clientY + 10}px`;
         coords.style.display = "block";
         coords.textContent = `X: ${mmX}mm, Y: ${mmY}mm`;
       });
 
-      image.addEventListener("mouseleave", () => {
+      paperElement.addEventListener("mouseleave", () => {
         coords.style.display = "none";
       });
-    }
+    });
   </script>
 </body>
 </html>
