@@ -106,6 +106,7 @@
 
   <script>
     const image = document.getElementById("uploaded-image");
+    const orientation = document.getElementById("orientation");
     const coords = document.getElementById("coords");
     const paperSizes = { A4: [210, 297], A5: [148, 210] };
 
@@ -115,9 +116,18 @@
         const pxX = event.clientX - rect.left;
         const pxY = event.clientY - rect.top;
         const size = paperSizes[document.getElementById("paper-size").value];
-        const mmX = Math.round((pxX / rect.width) * size[0]);
-        const mmY = Math.round((pxY / rect.height) * size[1]);
-
+        
+        let mmX, mmY;
+        if (orientation.value === "landscape") {
+            mmX = Math.round((pxX / rect.width) * size[1]);
+            mmY = Math.round((pxY / rect.height) * size[0]);
+        } else {
+            mmX = Math.round((pxX / rect.width) * size[0]);
+            mmY = Math.round((pxY / rect.height) * size[1]);
+        }
+        
+        
+        // console.log(orientation.value)
         coords.style.left = `${event.clientX + 10}px`;
         coords.style.top = `${event.clientY + 10}px`;
         coords.style.display = "block";
