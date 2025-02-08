@@ -86,8 +86,8 @@
       font-size: 0.9em;
       z-index: 1000;
     }
-    /* Styling for the Clear Markers button */
-    #clear-markers #hide-markers {
+    /* Styling for the Clear Markers and Hide Markers buttons */
+    #clear-markers, #hide-markers {
       margin-top: 20px;
       padding: 8px 12px;
       font-size: 1em;
@@ -126,14 +126,13 @@
     </form>
 
     <br /><br />
-    <p>Press ESCAPE or the clear marker button to clear markers.
-    </p>
+    <p>Press ESCAPE or the clear marker button to clear markers.</p>
     <!-- Clear Markers button -->
     <button id="clear-markers" type="button">Clear Markers</button>
     <p>Press SPACE or the hide marker button to toggle marker transparency and coordinate display.</p>
-    <!-- Hide Markerts button -->
+    <!-- Hide Markers button -->
     <button id="hide-markers" type="button">Hide Markers</button>
-</div>
+  </div>
 
   <div id="main">
     {% if uploaded_image %}
@@ -330,13 +329,15 @@
           pathElement.setAttribute("stroke-width", "2");
           pathElement.setAttribute("fill", "none");
           pathElement.classList.add("fixed-line");
-          // If in transparent mode, set opacity to 0.75; otherwise full opacity.
+          // Set opacity based on transparent mode.
           pathElement.style.opacity = transparentMode ? "0.75" : "1";
           overlay.appendChild(pathElement);
         }
       }
 
-      // On right-click, fixate the coordinate, draw an open circle and a label, then update the connecting line.
+      // On right-click, fixate the coordinate, draw an open circle and a label,
+      // then update the connecting line. Also, if there's a previous point,
+      // calculate the distance (in mm) between them and append it to the label.
       paperElement.addEventListener("contextmenu", function(event) {
         event.preventDefault();
         const rect = paperElement.getBoundingClientRect();
@@ -352,7 +353,6 @@
         // Create an SVG group to hold the marker and its label.
         let group = document.createElementNS(svgNS, "g");
         group.classList.add("fixed-point-group");
-        // Set the group's opacity based on transparentMode.
         group.style.opacity = transparentMode ? "0.75" : "1";
         // Draw an open circle.
         let circle = document.createElementNS(svgNS, "circle");
@@ -365,15 +365,27 @@
         group.appendChild(circle);
         // Create the text label.
         let textLabel = document.createElementNS(svgNS, "text");
-        // Here we simply position the label 10px right and 10px above the marker.
-        // (You could expand this to allow custom offsets if needed.)
         textLabel.setAttribute("x", x + 10);
         textLabel.setAttribute("y", y - 10);
         textLabel.setAttribute("fill", "white");
         textLabel.setAttribute("font-size", "12");
-        textLabel.textContent = `X: ${mmX}mm, Y: ${mmY}mm`;
+        // Build the label text.
+        let labelText = `X: ${mmX}mm, Y: ${mmY}mm`;
+        if (fixedPoints.length > 1) {
+          // Get the previous fixed point.
+          const prev = fixedPoints[fixedPoints.length - 2];
+          // Compute conversion factors (pixels to mm).
+          const factorX = widthMM / rect.width;
+          const factorY = heightMM / rect.height;
+          const dx = x - prev.x;
+          const dy = y - prev.y;
+          // Compute Euclidean distance in mm.
+          const distance_mm = Math.round(Math.sqrt((dx * factorX) ** 2 + (dy * factorY) ** 2));
+          labelText += `, d=${distance_mm}mm`;
+        }
+        textLabel.textContent = labelText;
         group.appendChild(textLabel);
-        // After rendering the text, add a dark background rectangle for readability.
+        // After the text is rendered, add a dark background rectangle for readability.
         requestAnimationFrame(() => {
           const bbox = textLabel.getBBox();
           const padding = 2;
@@ -389,7 +401,7 @@
         updateFixedLine();
       });
 
-      // Clear markers (and the associated line and labels) via Escape key or Clear Markers button.
+      // Clear markers (and the associated line and labels) via ESC key or Clear Markers button.
       function clearMarkers() {
         fixedPoints = [];
         while (overlay.firstChild) {
@@ -397,27 +409,24 @@
         }
       }
 
-      function hideMarkers(){
-        event.preventDefault();
-          transparentMode = !transparentMode;
-          // Update opacity of all marker groups and connecting lines.
-          document.querySelectorAll('.fixed-point-group, .fixed-line').forEach(el => {
-            el.style.opacity = transparentMode ? "0.20" : "1";
-          });
-          // In transparent mode, hide the hover coordinate tooltip.
-          if (transparentMode) {
-            coords.style.display = "none";
-          }
+      // Toggle transparency mode via SPACE key or the Hide Markers button.
+      function hideMarkers(event) {
+        if (event) event.preventDefault();
+        transparentMode = !transparentMode;
+        document.querySelectorAll('.fixed-point-group, .fixed-line').forEach(el => {
+          el.style.opacity = transparentMode ? "0.20" : "1";
+        });
+        if (transparentMode) {
+          coords.style.display = "none";
+        }
       }
 
       document.addEventListener("keydown", function(event) {
         if (event.key === "Escape") {
           clearMarkers();
         }
-        // When space is pressed, toggle transparent mode.
         if (event.key === " ") {
-            hideMarkers();
-          
+          hideMarkers(event);
         }
       });
 
@@ -425,8 +434,8 @@
         clearMarkers();
       });
 
-      hideMarkersButton.addEventListener("click", function() {
-        hideMarkers();
+      hideMarkersButton.addEventListener("click", function(event) {
+        hideMarkers(event);
       });
     });
   </script>
