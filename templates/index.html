@@ -46,7 +46,7 @@
       justify-content: center;
       align-items: center;
       overflow: hidden;
-      position: relative; /* for positioning the coordinate tooltip */
+      position: relative; /* for positioning the tooltip and SVG overlay */
     }
     /* The paper element represents the physical page */
     #paper {
@@ -58,12 +58,21 @@
       align-items: center;     /* default center vertically */
       overflow: hidden;
     }
-    /* The uploaded image is centered (or positioned as set) inside the paper */
+    /* The uploaded image is scaled to fit within the paper */
     #uploaded-image {
       max-width: 100%;
       max-height: 100%;
       object-fit: contain;
       display: block;
+    }
+    /* SVG overlay for drawing fixed circles, labels, and the extended line */
+    #overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none; /* allow clicks to pass through */
     }
     /* Coordinates tooltip styling */
     #coords {
@@ -87,8 +96,8 @@
       <br /><br />
       <label for="paper-size">Paper Size:</label>
       <select id="paper-size">
-        <option value="A5">A5</option>
         <option value="A4">A4</option>
+        <option value="A5">A5</option>
       </select>
       <br /><br />
       <label for="orientation">Orientation:</label>
@@ -113,9 +122,11 @@
   <div id="main">
     {% if uploaded_image %}
       <div id="canvas-container">
-        <!-- The paper element's dimensions (in pixels) will be updated via JS to match the selected paper size/orientation -->
+        <!-- The paper element will have dimensions computed via JavaScript -->
         <div id="paper">
           <img id="uploaded-image" src="{{ url_for('static', filename='uploads/' + uploaded_image) }}" alt="Uploaded Image">
+          <!-- SVG overlay for drawing fixed points, labels, and the extended line -->
+          <svg id="overlay"></svg>
         </div>
         <!-- Tooltip showing coordinates in mm from the paper's bottom-right -->
         <div id="coords">X: 0mm, Y: 0mm</div>
@@ -130,8 +141,12 @@
       const paperSizeSelect = document.getElementById("paper-size");
       const orientationSelect = document.getElementById("orientation");
       const imagePositionSelect = document.getElementById("image-position");
+      const overlay = document.getElementById("overlay");
 
-      // Update the dimensions of the paper element based on the selected paper size and orientation.
+      // Global array for fixed points (each with x,y in paper pixel coordinates)
+      let fixedPoints = [];
+
+      // Update the dimensions of the paper element based on selected paper size and orientation.
       function updatePaperDimensions() {
         const size = paperSizeSelect.value;
         const orient = orientationSelect.value;
@@ -153,13 +168,11 @@
             heightMM = 148;
           }
         }
-
-        // Get the canvas container's dimensions.
+        // Get container dimensions.
         const container = document.getElementById("canvas-container");
         const containerRect = container.getBoundingClientRect();
         const paperRatio = widthMM / heightMM;
-
-        // Compute the maximum display dimensions for the paper element so it fits within the container.
+        // Compute maximum display dimensions preserving aspect ratio.
         let displayWidth = containerRect.width;
         let displayHeight = containerRect.height;
         if (displayWidth / displayHeight > paperRatio) {
@@ -167,12 +180,10 @@
         } else {
           displayHeight = displayWidth / paperRatio;
         }
-
-        // Set the paper element dimensions.
+        // Set paper element dimensions.
         paperElement.style.width = displayWidth + "px";
         paperElement.style.height = displayHeight + "px";
-
-        // Store the mm dimensions in data attributes for later calculations.
+        // Store the mm dimensions in data attributes for coordinate calculations.
         paperElement.dataset.widthmm = widthMM;
         paperElement.dataset.heightmm = heightMM;
       }
@@ -202,28 +213,20 @@
       updatePaperDimensions();
       updateImagePosition();
 
-      // Update paper dimensions when the paper size or orientation changes.
+      // Update dimensions when paper size, orientation, or image position changes.
       paperSizeSelect.addEventListener("change", updatePaperDimensions);
       orientationSelect.addEventListener("change", updatePaperDimensions);
-
-      // Update image position when the dropdown selection changes.
       imagePositionSelect.addEventListener("change", updateImagePosition);
 
-      // Compute mouse coordinates relative to the paper element.
+      // Mousemove: compute coordinates relative to the paper's bottom-right in mm.
       paperElement.addEventListener("mousemove", (event) => {
         const rect = paperElement.getBoundingClientRect();
         const mouseX = event.clientX - rect.left;
         const mouseY = event.clientY - rect.top;
-
-        // Retrieve the actual paper size in mm.
         const widthMM = parseFloat(paperElement.dataset.widthmm);
         const heightMM = parseFloat(paperElement.dataset.heightmm);
-
-        // Compute the distances from the bottom-right corner.
         const mmX = Math.round(((rect.width - mouseX) / rect.width) * widthMM);
         const mmY = Math.round(((rect.height - mouseY) / rect.height) * heightMM);
-
-        // Position and update the tooltip.
         coords.style.left = `${event.clientX + 10}px`;
         coords.style.top = `${event.clientY + 10}px`;
         coords.style.display = "block";
@@ -232,6 +235,129 @@
 
       paperElement.addEventListener("mouseleave", () => {
         coords.style.display = "none";
+      });
+
+      // Computes extended line endpoints that lie on the border of the paper.
+      function computeExtendedLine(p1, p2, width, height) {
+        // Handle vertical line.
+        if (p1.x === p2.x) {
+          return { x1: p1.x, y1: 0, x2: p1.x, y2: height };
+        }
+        // Handle horizontal line.
+        if (p1.y === p2.y) {
+          return { x1: 0, y1: p1.y, x2: width, y2: p1.y };
+        }
+        const slope = (p2.y - p1.y) / (p2.x - p1.x);
+        const intercept = p1.y - slope * p1.x;
+        const intersections = [];
+        // Left edge (x = 0)
+        let yAtLeft = intercept;
+        if (yAtLeft >= 0 && yAtLeft <= height) {
+          intersections.push({ x: 0, y: yAtLeft });
+        }
+        // Right edge (x = width)
+        let yAtRight = slope * width + intercept;
+        if (yAtRight >= 0 && yAtRight <= height) {
+          intersections.push({ x: width, y: yAtRight });
+        }
+        // Top edge (y = 0)
+        let xAtTop = -intercept / slope;
+        if (xAtTop >= 0 && xAtTop <= width) {
+          intersections.push({ x: xAtTop, y: 0 });
+        }
+        // Bottom edge (y = height)
+        let xAtBottom = (height - intercept) / slope;
+        if (xAtBottom >= 0 && xAtBottom <= width) {
+          intersections.push({ x: xAtBottom, y: height });
+        }
+        if (intersections.length < 2) return null;
+        // For simplicity, take the first two valid intersections.
+        return { x1: intersections[0].x, y1: intersections[0].y,
+                 x2: intersections[1].x, y2: intersections[1].y };
+      }
+
+      // On right-click, fixate the coordinate, draw an open circle and a label with a dark background.
+      // When two fixed points exist, draw the extended line.
+      paperElement.addEventListener("contextmenu", function(event) {
+        event.preventDefault();
+        const rect = paperElement.getBoundingClientRect();
+        const x = event.clientX - rect.left;
+        const y = event.clientY - rect.top;
+        const widthMM = parseFloat(paperElement.dataset.widthmm);
+        const heightMM = parseFloat(paperElement.dataset.heightmm);
+        // Convert the fixed pixel coordinates to mm relative to the bottom-right.
+        const mmX = Math.round(((rect.width - x) / rect.width) * widthMM);
+        const mmY = Math.round(((rect.height - y) / rect.height) * heightMM);
+
+        if (fixedPoints.length < 2) {
+          fixedPoints.push({ x: x, y: y });
+          const svgNS = "http://www.w3.org/2000/svg";
+          // Create a group to hold both the circle and its label.
+          let group = document.createElementNS(svgNS, "g");
+          group.classList.add("fixed-point-group");
+
+          // Draw an open circle at the fixed point.
+          let circle = document.createElementNS(svgNS, "circle");
+          circle.setAttribute("cx", x);
+          circle.setAttribute("cy", y);
+          circle.setAttribute("r", 5);
+          circle.setAttribute("fill", "none");
+          circle.setAttribute("stroke", "red");
+          circle.setAttribute("stroke-width", "2");
+          group.appendChild(circle);
+
+          // Create the text label displaying the mm coordinates.
+          let textLabel = document.createElementNS(svgNS, "text");
+          textLabel.setAttribute("x", x + 10);
+          textLabel.setAttribute("y", y - 10);
+          textLabel.setAttribute("fill", "white");
+          textLabel.setAttribute("font-size", "12");
+          textLabel.textContent = `X: ${mmX}mm, Y: ${mmY}mm`;
+          group.appendChild(textLabel);
+
+          // Append the group to the overlay.
+          overlay.appendChild(group);
+
+          // After the text is rendered, compute its bounding box and create a background rectangle.
+          requestAnimationFrame(() => {
+              const bbox = textLabel.getBBox();
+              const padding = 2;
+              let rectBg = document.createElementNS(svgNS, "rect");
+              rectBg.setAttribute("x", bbox.x - padding);
+              rectBg.setAttribute("y", bbox.y - padding);
+              rectBg.setAttribute("width", bbox.width + padding * 2);
+              rectBg.setAttribute("height", bbox.height + padding * 2);
+              rectBg.setAttribute("fill", "rgba(0, 0, 0, 0.7)");
+              // Insert the rectangle behind the text label.
+              group.insertBefore(rectBg, textLabel);
+          });
+
+          // When two fixed points exist, compute and draw the extended line.
+          if (fixedPoints.length === 2) {
+            let lineEndpoints = computeExtendedLine(fixedPoints[0], fixedPoints[1], rect.width, rect.height);
+            if (lineEndpoints) {
+              let line = document.createElementNS(svgNS, "line");
+              line.setAttribute("x1", lineEndpoints.x1);
+              line.setAttribute("y1", lineEndpoints.y1);
+              line.setAttribute("x2", lineEndpoints.x2);
+              line.setAttribute("y2", lineEndpoints.y2);
+              line.setAttribute("stroke", "rgba(0, 0, 255, 0.5)");
+              line.setAttribute("stroke-width", "2");
+              line.classList.add("fixed-line");
+              overlay.appendChild(line);
+            }
+          }
+        }
+      });
+
+      // When Escape is pressed, clear fixed coordinates and remove all drawn circles, labels, and lines.
+      document.addEventListener("keydown", function(event) {
+        if (event.key === "Escape") {
+          fixedPoints = [];
+          while (overlay.firstChild) {
+            overlay.removeChild(overlay.firstChild);
+          }
+        }
       });
     });
   </script>
