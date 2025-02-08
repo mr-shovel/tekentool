@@ -121,7 +121,6 @@
         <option value="right">Right</option>
       </select>
       <br /><br />
-      <!-- (Label positioning and distance calculation features from previous steps were removed per instruction.) -->
       <button type="submit">Upload</button>
     </form>
 
@@ -132,6 +131,7 @@
     <p>Press SPACE or the hide marker button to toggle marker transparency and coordinate display.</p>
     <!-- Hide Markers button -->
     <button id="hide-markers" type="button">Hide Markers</button>
+    <p>Press CTRL+Z / CMD+Z to undo the last marker.</p>
   </div>
 
   <div id="main">
@@ -401,6 +401,21 @@
         updateFixedLine();
       });
 
+      // Function to undo the last marker.
+      function undoMarker() {
+        if (fixedPoints.length > 0) {
+          // Remove the last fixed point.
+          fixedPoints.pop();
+          // Remove the last marker group from the overlay.
+          const groups = overlay.querySelectorAll('.fixed-point-group');
+          if (groups.length > 0) {
+            const lastGroup = groups[groups.length - 1];
+            overlay.removeChild(lastGroup);
+          }
+          updateFixedLine();
+        }
+      }
+
       // Clear markers (and the associated line and labels) via ESC key or Clear Markers button.
       function clearMarkers() {
         fixedPoints = [];
@@ -425,8 +440,14 @@
         if (event.key === "Escape") {
           clearMarkers();
         }
+        // SPACE toggles transparent mode.
         if (event.key === " ") {
           hideMarkers(event);
+        }
+        // Undo last marker with Control+Z or Command+Z.
+        if (event.key.toLowerCase() === "z" && (event.ctrlKey || event.metaKey)) {
+          event.preventDefault();
+          undoMarker();
         }
       });
 
