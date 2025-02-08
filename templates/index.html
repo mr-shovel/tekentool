@@ -57,6 +57,9 @@
       justify-content: center; /* default center horizontally */
       align-items: center;     /* default center vertically */
       overflow: hidden;
+      /* Set default transform values */
+      transform: scale(1);
+      transform-origin: center center;
     }
     /* The uploaded image is scaled to fit within the paper */
     #uploaded-image {
@@ -123,7 +126,6 @@
       <br /><br />
       <button type="submit">Upload</button>
     </form>
-
     <br /><br />
     <p>Press ESCAPE or the clear marker button to clear markers.</p>
     <!-- Clear Markers button -->
@@ -132,6 +134,7 @@
     <!-- Hide Markers button -->
     <button id="hide-markers" type="button">Hide Markers</button>
     <p>Press CTRL+Z / CMD+Z to undo the last marker.</p>
+    <p>Press D to zoom in (2×) onto the area with markers (markers become transparent).</p>
   </div>
 
   <div id="main">
@@ -160,8 +163,9 @@
       const clearMarkersButton = document.getElementById("clear-markers");
       const hideMarkersButton = document.getElementById("hide-markers");
 
-      // Global state for toggling transparent mode.
+      // Global state for toggling transparent mode and zoom.
       let transparentMode = false;
+      let zoomedIn = false;
       // Array to store fixed points (each with x,y in paper pixel coordinates)
       let fixedPoints = [];
 
@@ -335,9 +339,8 @@
         }
       }
 
-      // On right-click, fixate the coordinate, draw an open circle and a label,
-      // then update the connecting line. Also, if there's a previous point,
-      // calculate the distance (in mm) between them and append it to the label.
+      // On right-click, fixate the coordinate, draw an open circle and a label.
+      // If there is a previous marker, calculate and append the distance.
       paperElement.addEventListener("contextmenu", function(event) {
         event.preventDefault();
         const rect = paperElement.getBoundingClientRect();
@@ -372,20 +375,17 @@
         // Build the label text.
         let labelText = `X: ${mmX}mm, Y: ${mmY}mm`;
         if (fixedPoints.length > 1) {
-          // Get the previous fixed point.
           const prev = fixedPoints[fixedPoints.length - 2];
-          // Compute conversion factors (pixels to mm).
           const factorX = widthMM / rect.width;
           const factorY = heightMM / rect.height;
           const dx = x - prev.x;
           const dy = y - prev.y;
-          // Compute Euclidean distance in mm.
           const distance_mm = Math.round(Math.sqrt((dx * factorX) ** 2 + (dy * factorY) ** 2));
           labelText += `, d=${distance_mm}mm`;
         }
         textLabel.textContent = labelText;
         group.appendChild(textLabel);
-        // After the text is rendered, add a dark background rectangle for readability.
+        // After rendering the text, add a dark background rectangle for readability.
         requestAnimationFrame(() => {
           const bbox = textLabel.getBBox();
           const padding = 2;
@@ -404,9 +404,7 @@
       // Function to undo the last marker.
       function undoMarker() {
         if (fixedPoints.length > 0) {
-          // Remove the last fixed point.
           fixedPoints.pop();
-          // Remove the last marker group from the overlay.
           const groups = overlay.querySelectorAll('.fixed-point-group');
           if (groups.length > 0) {
             const lastGroup = groups[groups.length - 1];
@@ -416,7 +414,7 @@
         }
       }
 
-      // Clear markers (and the associated line and labels) via ESC key or Clear Markers button.
+      // Clear markers (and the associated line and labels).
       function clearMarkers() {
         fixedPoints = [];
         while (overlay.firstChild) {
@@ -424,7 +422,7 @@
         }
       }
 
-      // Toggle transparency mode via SPACE key or the Hide Markers button.
+      // Toggle transparency mode via SPACE key or Hide Markers button.
       function hideMarkers(event) {
         if (event) event.preventDefault();
         transparentMode = !transparentMode;
@@ -436,18 +434,45 @@
         }
       }
 
+      // Toggle zoom in/out via D key.
+      function toggleZoom() {
+        if (!zoomedIn) {
+          // Zoom in: scale paper 2× from its center.
+          paperElement.style.transform = "scale(2)";
+          paperElement.style.transformOrigin = "center center";
+          zoomedIn = true;
+          // Force markers to be transparent.
+          document.querySelectorAll('.fixed-point-group, .fixed-line').forEach(el => {
+            el.style.opacity = "0.20";
+          });
+        } else {
+          // Zoom out: reset scale.
+          paperElement.style.transform = "scale(1)";
+          zoomedIn = false;
+          // Restore markers' opacity based on transparentMode state.
+          document.querySelectorAll('.fixed-point-group, .fixed-line').forEach(el => {
+            el.style.opacity = transparentMode ? "0.20" : "1";
+          });
+        }
+      }
+
       document.addEventListener("keydown", function(event) {
         if (event.key === "Escape") {
           clearMarkers();
         }
-        // SPACE toggles transparent mode.
+        // SPACE toggles marker transparency.
         if (event.key === " ") {
           hideMarkers(event);
         }
-        // Undo last marker with Control+Z or Command+Z.
+        // CTRL+Z / CMD+Z undoes the last marker.
         if (event.key.toLowerCase() === "z" && (event.ctrlKey || event.metaKey)) {
           event.preventDefault();
           undoMarker();
+        }
+        // D toggles zoom in/out and forces marker transparency.
+        if (event.key.toLowerCase() === "d") {
+          event.preventDefault();
+          toggleZoom();
         }
       });
 
