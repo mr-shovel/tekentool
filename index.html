@@ -148,9 +148,10 @@
       <!-- Main content area -->
       <div id="main" class="col-md-9 d-flex align-items-center justify-content-center p-4">
         <div id="canvas-container">
-          <div id="paper">
+          <div id="paper" style="background-color: #fffaf6">
             <!-- The uploaded image will be displayed here -->
-            <img id="uploaded-image" src="" alt="Uploaded Image">
+            <img id="uploaded-image" src="marks_tekentool.svg" alt="Uploaded Image">
+            
             <svg id="overlay"></svg>
           </div>
           <div id="coords">X: 0mm, Y: 0mm</div>
@@ -304,38 +305,20 @@
                  x2: intersections[1].x, y2: intersections[1].y };
       }
 
-      function catmullRom2Bezier(points, tension) {
-        if (points.length < 2) return "";
-        tension = tension || 0.5;
+      function drawStraightLine(points) {
         let d = `M ${points[0].x} ${points[0].y}`;
-        for (let i = 0; i < points.length - 1; i++) {
-          const p0 = i === 0 ? points[0] : points[i - 1];
-          const p1 = points[i];
-          const p2 = points[i + 1];
-          const p3 = (i + 2 < points.length) ? points[i + 2] : p2;
-          const bp1x = p1.x + ((p2.x - p0.x) / 6) * tension;
-          const bp1y = p1.y + ((p2.y - p0.y) / 6) * tension;
-          const bp2x = p2.x - ((p3.x - p1.x) / 6) * tension;
-          const bp2y = p2.y - ((p3.y - p1.y) / 6) * tension;
-          d += ` C ${bp1x} ${bp1y}, ${bp2x} ${bp2y}, ${p2.x} ${p2.y}`;
+        for (let i = 1; i < points.length; i++) {
+          d += ` L ${points[i].x} ${points[i].y}`;
         }
         return d;
       }
 
+      // Update the connecting line between markers using straight lines.
       function updateFixedLine() {
         document.querySelectorAll('.fixed-line').forEach(line => line.remove());
         if (fixedPoints.length < 2) return;
-        const rect = paperElement.getBoundingClientRect();
         const svgNS = "http://www.w3.org/2000/svg";
-        let pathString = "";
-        if (fixedPoints.length === 2) {
-          const endpoints = computeExtendedLine(fixedPoints[0], fixedPoints[1], rect.width, rect.height);
-          if (endpoints) {
-            pathString = `M ${endpoints.x1} ${endpoints.y1} L ${endpoints.x2} ${endpoints.y2}`;
-          }
-        } else {
-          pathString = catmullRom2Bezier(fixedPoints, 0.5);
-        }
+        let pathString = drawStraightLine(fixedPoints);
         if (pathString) {
           let pathElement = document.createElementNS(svgNS, "path");
           pathElement.setAttribute("d", pathString);
@@ -430,10 +413,26 @@
         if (transparentMode) { coords.style.display = "none"; }
       }
 
+      // Zoom now zooms in to the centroid of the markers.
       function toggleZoom() {
         if (!zoomedIn) {
+          if (fixedPoints.length > 0) {
+            let sumX = 0, sumY = 0;
+            fixedPoints.forEach(pt => {
+              sumX += pt.x;
+              sumY += pt.y;
+            });
+            let centroidX = sumX / fixedPoints.length;
+            let centroidY = sumY / fixedPoints.length;
+            const paperRect = paperElement.getBoundingClientRect();
+            // Calculate percentages relative to the paper dimensions.
+            let originXPercent = (centroidX / paperRect.width) * 100;
+            let originYPercent = (centroidY / paperRect.height) * 100;
+            paperElement.style.transformOrigin = `${originXPercent}% ${originYPercent}%`;
+          } else {
+            paperElement.style.transformOrigin = "center center";
+          }
           paperElement.style.transform = "scale(2)";
-          paperElement.style.transformOrigin = "center center";
           zoomedIn = true;
           document.querySelectorAll('.fixed-point-group, .fixed-line').forEach(el => {
             el.style.opacity = "0.20";
