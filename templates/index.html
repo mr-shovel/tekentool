@@ -10,7 +10,9 @@
     /* Universal box-sizing */
     * { box-sizing: border-box; }
     html, body { height: 100%; }
-    body { font-family: sans-serif; }
+    body { font-family: sans-serif;         
+        /* background-color: #f5efeb; */
+    }
     
     /* Main area styling */
     #main {
@@ -80,18 +82,23 @@
     /* Adjust sidebar height to fill viewport */
     #sidebar {
       height: 100%;
+      background: #f4f4f4;
+    }
+
+    #navbar{
+        background-color: #f7e6d3;
     }
   </style>
 </head>
-<body class="bg-light">
+<body style="background-color: #f5efeb;">
   <!-- Navbar with toggle for the sidebar -->
-  <nav class="navbar navbar-light bg-light border-bottom">
+  <nav class="navbar navbar-light border-bottom" style="background-color: #f7e6d3;">
     <div class="container-fluid">
       <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#sidebar" aria-controls="sidebar" aria-expanded="true" aria-label="Toggle sidebar">
         <span class="navbar-toggler-icon"></span>
       </button>
       <a class="navbar-brand" href="#">
-        <img src="/static/logo/2.svg" alt="" width="30" height="24" class="d-inline-block align-text-top">
+        <img src="/static/logo/logo_marks_tekentool_transparant.svg" alt="" width="30" height="24" class="d-inline-block align-text-top">
         Mark's Tekentool
       </a>
 
@@ -101,7 +108,7 @@
   <div class="container-fluid" style="height: calc(100% - 56px);">
     <div class="row h-100">
       <!-- Sidebar (Bootstrap collapse) -->
-      <div id="sidebar" class="col-md-3 collapse show bg-white border-end p-4">
+      <div id="sidebar" class="col-md-3 collapse show border-end p-4" style="background-color: #fffaf6;">
         <h2 class="h5 mb-3">Upload Image</h2>
         <form action="/upload" method="post" enctype="multipart/form-data">
           <div class="mb-3">
@@ -143,7 +150,7 @@
           <button id="zoom-toggle" type="button" class="btn btn-outline-info" data-bs-toggle="tooltip" data-bs-placement="right" title="Shortcut: D">Zoom In/Out</button>
         </div>
         <div class="mt-4 text-center">
-            <img src="/static/logo/1.svg" class="img-fluid" alt="Logo" style="max-height: 100px;">
+            <img src="/static/logo/marks_tekentool.svg" class="img-fluid" alt="Logo" style="max-height: 200px;">
           </div>
           
 
